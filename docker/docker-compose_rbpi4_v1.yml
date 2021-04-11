@@ -1,0 +1,205 @@
+version: "3.7"
+
+services:
+  # TODO: telegraf for monitoring System
+
+  # postgresql: # ------------------------------------- POSTRGRESQL -------------------------------------
+  #   image: postgres:${MICROSERVICE_POSTGRES_VERSION}
+  #   # deploy:
+  #   #   resources:
+  #   #     limits:
+  #   #       cpus: '0.12'
+  #   #       memory: 50M
+  #   #     # reservations:
+  #   #     #   cpus: '0.25' # default values
+  #   #     #   memory: 20M  # default values
+  #   environment:
+  #     POSTGRES_PASSWORD: postgres
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "1" 
+  #   ports:
+  #     - "5433:5432"
+  #   volumes:
+  #     - type: bind
+  #       source: $HOME/setup/bin/configuration/postgresql/initdb
+  #       target: /docker-entrypoint-initdb.d/
+  #     - type: volume
+  #       source: postgresqldata
+  #       target: /var/lib/postgresql/data
+  #       # Configuration: /var/lib/postgresql/data/postgresql.conf
+  #   networks:
+  #     - rbpi4dockernet
+
+  redis:
+    image: redis:6.0.8
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '0.06'
+    #       memory: 50M
+    #     # reservations:
+    #     #   cpus: '0.25' # default values
+    #     #   memory: 20M  # default values
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "1"
+    # expose: # expose: Exposing ports is unnecessary - services on the same network can access each other's containers on any port.
+    #   - "6379"
+    volumes:
+      - type: bind
+        source: ./config/redis/redis.conf
+        target: /usr/local/etc/redis/redis.conf
+    #   - type: volume
+    #     source: redisdata
+    #     target: /data
+    networks:
+      - rbpi4dockernet
+
+  # EMQX HA: https://docs.emqx.io/enterprise/latest/en/getting-started/install.html##docker
+  emqx1:
+    image: emqx/emqx:4.2.1
+    environment:
+    - "EMQX_NAME=emqx"
+    - "EMQX_HOST=node1.emqx.io"
+    - "EMQX_CLUSTER__DISCOVERY=static"
+    - "EMQX_CLUSTER__STATIC__SEEDS=emqx@node1.emqx.io, emqx@node2.emqx.io"
+    - "EMQX_ZONE__EXTERNAL__RETRY_INTERVAL=2s"
+    - "EMQX_MQTT__MAX_TOPIC_ALIAS=10"
+    ports:
+      - "1884:1883"
+    # volumes:
+    #     - ./tmp/emqx.lic:/opt/emqx/etc/emqx.lic
+    # healthcheck:
+    #   test: ["CMD", "/opt/emqx/bin/emqx_ctl", "status"]
+    #   interval: 5s
+    #   timeout: 25s
+    #   retries: 5
+    networks:
+      rbpi4dockernet:
+        aliases:
+        - node1.emqx.io
+
+  emqx2:
+    image: emqx/emqx:4.2.1
+    environment:
+    - "EMQX_NAME=emqx"
+    - "EMQX_HOST=node2.emqx.io"
+    - "EMQX_CLUSTER__DISCOVERY=static"
+    - "EMQX_CLUSTER__STATIC__SEEDS=emqx@node1.emqx.io, emqx@node2.emqx.io"
+    - "EMQX_ZONE__EXTERNAL__RETRY_INTERVAL=2s"
+    - "EMQX_MQTT__MAX_TOPIC_ALIAS=10"
+    # volumes:
+    #     - ./tmp/emqx.lic:/opt/emqx/etc/emqx.lic
+    # healthcheck:
+    #   test: ["CMD", "/opt/emqx/bin/emqx_ctl", "status"]
+    #   interval: 5s
+    #   timeout: 25s
+    #   retries: 5
+    networks:
+      rbpi4dockernet:
+        aliases:
+        - node2.emqx.io
+
+  # mosquitto:
+  #   image: eclipse-mosquitto:1.6.12
+  #   # deploy:
+  #   #   resources:
+  #   #     limits:
+  #   #       cpus: '0.05'
+  #   #       memory: 50M
+  #   #     # reservations:
+  #   #     #   cpus: '0.25' # default values
+  #   #     #   memory: 20M  # default values
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "1" 
+  #   ports:
+  #     - "1883:1883"
+  #   # expose: # expose: Exposing ports is unnecessary - services on the same network can access each other's containers on any port.
+  #   #   - "1883"
+  #   # volumes:
+  #   #   - type: volume
+  #   #     source: mosquittodata
+  #   #     target: /var/lib/mosquitto/
+  #   networks:
+  #     - rbpi4dockernet
+
+  nodered:
+    image: nodered/node-red:1.1.3
+    # environment:
+    #   FLOWS: /data/flows.json
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '0.12'
+    #       memory: 400M
+    #     # reservations:
+    #     #   cpus: '0.25' # default values
+    #     #   memory: 20M  # default values
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "1"
+    ports:
+      - "1880:1880"
+    volumes:
+      - type: volume
+        source: nodereddata
+        target: /data
+      # - type: bind
+      #   source: $HOME/setup/bin/configuration/node-red
+      #   target: /config
+    networks:
+      - rbpi4dockernet
+
+  grafana:
+    image: grafana/grafana:7.2.1
+    environment:
+      GF_INSTALL_PLUGINS: redis-datasource
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '0.12'
+    #       memory: 400M
+    #     # reservations:
+    #     #   cpus: '0.25' # default values
+    #     #   memory: 20M  # default values
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "1"
+    ports:
+      - "3000:3000"
+    volumes:
+      - type: volume
+        source: grafanadata
+        target: /var/lib/grafana
+      - type: volume
+        source: grafanaplugins
+        target: /var/lib/grafana/plugins
+      # - type: bind
+      #   source: ./config/grafana/grafana.ini
+      #   target: /etc/grafana/grafana.ini
+    networks:
+      - rbpi4dockernet
+
+# Allocated in /var/lib/docker/volumes/...
+volumes:
+  # redisdata:
+  # mosquittodata:
+  nodereddata:
+  grafanadata:
+  grafanaplugins:
+
+networks:
+  rbpi4dockernet:
+    driver: overlay
